@@ -22,6 +22,10 @@ class MainActivity: FlutterActivity() {
                     startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION))
                     result.success(null)
                 }
+                "requestBatteryOptimizationPermission" -> {
+                    startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                    result.success(null)
+                }
                 "getInstalledApps" -> {
                     val pm = packageManager
                     val packages = pm.getInstalledApplications(android.content.pm.PackageManager.GET_META_DATA)

@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/focus_provider.dart';
@@ -63,7 +64,11 @@ class _AppSelectorScreenState extends State<AppSelectorScreen> {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Color(0xFF1E3A8A), Color(0xFF0F172A), Color(0xFF0F172A)],
+                colors: [
+                  Color(0xFFE8E6F8), // pastel lavender
+                  Color(0xFFE0F4E8), // mint green
+                  Color(0xFFD6E8EE), // baby blue
+                ],
               ),
             ),
           ),
@@ -80,23 +85,31 @@ class _AppSelectorScreenState extends State<AppSelectorScreen> {
 
                       return Container(
                         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.05),
+                        child: ClipRRect(
                           borderRadius: BorderRadius.circular(15),
-                          border: Border.all(
-                            color: isBlocked ? const Color(0xFFEF4444).withOpacity(0.5) : Colors.transparent,
-                            width: 1,
-                          ),
-                        ),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.4),
+                                borderRadius: BorderRadius.circular(15),
+                                border: Border.all(
+                                  color: isBlocked ? const Color(0xFFEF4444).withOpacity(0.5) : Colors.white.withOpacity(0.6),
+                                  width: 1,
+                                ),
+                              ),
                         child: ListTile(
-                          title: Text(appName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-                          subtitle: Text(packageName, style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.4))),
+                          title: Text(appName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Color(0xFF334155))),
+                          subtitle: Text(packageName, style: TextStyle(fontSize: 12, color: const Color(0xFF334155).withOpacity(0.6))),
                           trailing: Switch(
                             value: isBlocked,
                             activeColor: const Color(0xFFEF4444),
                             onChanged: (_) => focusProvider.toggleAppBlacklist(packageName),
                           ),
                           onTap: () => focusProvider.toggleAppBlacklist(packageName),
+                        ),
+                            ),
+                          ),
                         ),
                       );
                     },

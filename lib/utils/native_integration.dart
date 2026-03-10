@@ -21,6 +21,15 @@ class NativeIntegration {
     }
   }
 
+  // Request Battery Optimization Ignore Permission (Android)
+  static Future<void> requestBatteryOptimizationPermission() async {
+    try {
+      await _channel.invokeMethod('requestBatteryOptimizationPermission');
+    } on PlatformException catch (e) {
+      print("Failed to request battery permission: '${e.message}'.");
+    }
+  }
+
   // Get installed apps (Android)
   static Future<List<Map<String, String>>> getInstalledApps() async {
     try {
