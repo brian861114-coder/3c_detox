@@ -15,6 +15,7 @@ class AppSelectorScreen extends StatefulWidget {
 class _AppSelectorScreenState extends State<AppSelectorScreen> {
   List<Map<String, String>> _installedApps = [];
   bool _isLoading = true;
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -38,6 +39,15 @@ class _AppSelectorScreenState extends State<AppSelectorScreen> {
   Widget build(BuildContext context) {
     final focusProvider = context.watch<FocusProvider>();
     final lang = context.watch<LanguageProvider>();
+
+    final filteredApps = _searchQuery.isEmpty
+        ? _installedApps
+        : _installedApps.where((app) {
+            final appName = app['name']?.toLowerCase() ?? '';
+            final packageName = app['packageName']?.toLowerCase() ?? '';
+            final query = _searchQuery.toLowerCase();
+            return appName.contains(query) || packageName.contains(query);
+          }).toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -75,12 +85,36 @@ class _AppSelectorScreenState extends State<AppSelectorScreen> {
           SafeArea(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : ListView.builder(
-                    itemCount: _installedApps.length,
-                    itemBuilder: (context, index) {
-                      final app = _installedApps[index];
-                      final packageName = app['packageName']!;
-                      final appName = app['name']!;
+                : Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                        child: TextField(
+                          onChanged: (value) {
+                            setState(() {
+                              _searchQuery = value;
+                            });
+                          },
+                          decoration: InputDecoration(
+                            hintText: 'Search apps...',
+                            prefixIcon: const Icon(Icons.search, color: Color(0xFF334155)),
+                            filled: true,
+                            fillColor: Colors.white.withOpacity(0.6),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(15),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: ListView.builder(
+                          padding: EdgeInsets.zero,
+                          itemCount: filteredApps.length,
+                          itemBuilder: (context, index) {
+                            final app = filteredApps[index];
+                            final packageName = app['packageName']!;
+                            final appName = app['name']!;
                       final isBlocked = focusProvider.blacklistedApps.contains(packageName);
 
                       return Container(
@@ -113,6 +147,9 @@ class _AppSelectorScreenState extends State<AppSelectorScreen> {
                         ),
                       );
                     },
+                  ),
+                      ),
+                    ],
                   ),
           ),
         ],
