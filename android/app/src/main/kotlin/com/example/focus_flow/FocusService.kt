@@ -18,11 +18,16 @@ class FocusService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private var isRunning = false
     private var blockedApps: List<String> = emptyList()
+    private var remainingSeconds = 0
 
     private val checkRunnable = object : Runnable {
         override fun run() {
             if (isRunning) {
                 checkForegroundApp()
+                if (remainingSeconds > 0) {
+                    remainingSeconds--
+                }
+                updateNotification()
                 handler.postDelayed(this, 1000)
             }
         }
@@ -42,6 +47,23 @@ class FocusService : Service() {
         } else {
             startForeground(1, notification)
         }
+    }
+    
+    private fun updateNotification() {
+        val minutes = remainingSeconds / 60
+        val seconds = remainingSeconds % 60
+        val timeString = String.format("%02d:%02d", minutes, seconds)
+        val contentText = "專注進行中  剩下(\$timeString)"
+
+        val notification = NotificationCompat.Builder(this, "FocusFlowChannel")
+            .setContentTitle("Focus Mode Active")
+            .setContentText(contentText)
+            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setOnlyAlertOnce(true)
+            .build()
+            
+        val manager = getSystemService(NotificationManager::class.java)
+        manager?.notify(1, notification)
     }
 
     private fun createNotificationChannel() {
@@ -63,8 +85,10 @@ class FocusService : Service() {
         }
 
         val apps = intent?.getStringArrayListExtra("blockedApps")
+        val secondsExtra = intent?.getIntExtra("remainingSeconds", 0) ?: 0
         if (apps != null) {
             blockedApps = apps.toList()
+            remainingSeconds = secondsExtra
             if (!isRunning) {
                 isRunning = true
                 handler.post(checkRunnable)

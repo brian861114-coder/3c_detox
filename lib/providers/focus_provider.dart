@@ -2,13 +2,17 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/native_integration.dart';
+import '../models/block_list.dart';
 
 class FocusProvider with ChangeNotifier {
   // Config state
   int _userFocusDurationSeconds = 30 * 60;
   bool _isPomodoroMode = true;
   bool _isStrictMode = false;
-  Set<String> _blacklistedApps = {};
+  
+  // Block Lists
+  List<BlockList> _blockLists = [];
+  String _activeBlockListId = '';
 
   // Active state
   bool _isFocusing = false;
@@ -27,10 +31,25 @@ class FocusProvider with ChangeNotifier {
   Future<void> _loadState() async {
     final prefs = await SharedPreferences.getInstance();
     
-    // Load blacklisted apps
-    final savedApps = prefs.getStringList('blacklistedApps');
-    if (savedApps != null) {
-      _blacklistedApps = savedApps.toSet();
+    // Load block lists
+    final blockListsJson = prefs.getStringList('blockLists');
+    if (blockListsJson != null && blockListsJson.isNotEmpty) {
+      _blockLists = blockListsJson.map((e) => BlockList.fromJson(e)).toList();
+    } else {
+      // Setup default list (migrate old blacklisted apps if they exist)
+      final oldSavedApps = prefs.getStringList('blacklistedApps');
+      final defaultList = BlockList(
+        id: DateTime.now().millisecondsSinceEpoch.toString(), 
+        name: '新封鎖清單1', 
+        apps: oldSavedApps ?? []
+      );
+      _blockLists = [defaultList];
+    }
+    
+    _activeBlockListId = prefs.getString('activeBlockListId') ?? _blockLists.first.id;
+    // ensure active list exists
+    if (!_blockLists.any((list) => list.id == _activeBlockListId)) {
+        _activeBlockListId = _blockLists.first.id;
     }
     
     // Load stats
@@ -66,7 +85,7 @@ class FocusProvider with ChangeNotifier {
             if (passed > 0) {
                 _pomodoroElapsedSeconds += passed;
             }
-            NativeIntegration.startPersistentService(_blacklistedApps.toList());
+            NativeIntegration.startPersistentService(getActiveBlockListApps(), _remainingSeconds);
         }
         
         _startInternalTimer();
@@ -85,9 +104,11 @@ class FocusProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _saveBlacklistedApps() async {
+  Future<void> _saveBlockLists() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList('blacklistedApps', _blacklistedApps.toList());
+    final jsonList = _blockLists.map((e) => e.toJson()).toList();
+    await prefs.setStringList('blockLists', jsonList);
+    await prefs.setString('activeBlockListId', _activeBlockListId);
   }
 
   Future<void> _saveStats() async {
@@ -131,9 +152,82 @@ class FocusProvider with ChangeNotifier {
   bool get isStrictMode => _isStrictMode;
   int get remainingSeconds => _remainingSeconds;
   int get userFocusDurationSeconds => _userFocusDurationSeconds;
-  Set<String> get blacklistedApps => _blacklistedApps;
   int get focusCyclesCompleted => _focusCyclesCompleted;
   int get totalFocusedMinutes => _totalFocusedMinutes;
+
+  List<BlockList> get blockLists => _blockLists;
+  String get activeBlockListId => _activeBlockListId;
+
+  List<String> getActiveBlockListApps() {
+    try {
+      return _blockLists.firstWhere((list) => list.id == _activeBlockListId).apps;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  BlockList getBlockList(String id) {
+    return _blockLists.firstWhere((list) => list.id == id, orElse: () => _blockLists.first);
+  }
+
+  void setActiveBlockList(String id) {
+    if (!_isFocusing && !_isResting) {
+        _activeBlockListId = id;
+        _saveBlockLists();
+        notifyListeners();
+    }
+  }
+
+  String createBlockList() {
+    int counter = 1;
+    String newName = "新封鎖清單$counter";
+    while (_blockLists.any((list) => list.name == newName)) {
+      counter++;
+      newName = "新封鎖清單$counter";
+    }
+    
+    final newList = BlockList(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      name: newName,
+      apps: []
+    );
+    _blockLists.add(newList);
+    _saveBlockLists();
+    notifyListeners();
+    return newList.id;
+  }
+
+  void updateBlockListName(String id, String newName) {
+    final list = _blockLists.firstWhere((list) => list.id == id);
+    // Only update if new name is unique or same as current
+    if (newName.isNotEmpty && !_blockLists.any((l) => l.name == newName && l.id != id)) {
+        list.name = newName;
+        _saveBlockLists();
+        notifyListeners();
+    }
+  }
+
+  void deleteBlockList(String id) {
+     if (_blockLists.length > 1 && !_isFocusing && !_isResting) {
+         _blockLists.removeWhere((list) => list.id == id);
+         if (_activeBlockListId == id) {
+             _activeBlockListId = _blockLists.first.id;
+         }
+         _saveBlockLists();
+         notifyListeners();
+     }
+  }
+
+  void toggleAppInList(String listId, String packageName) {
+    final list = _blockLists.firstWhere((list) => list.id == listId);
+    if (list.apps.contains(packageName)) {
+      list.apps.remove(packageName);
+    } else {
+      list.apps.add(packageName);
+    }
+    _saveBlockLists();
+    notifyListeners();
+  }
 
   void setUserFocusDuration(int minutes, int seconds) {
     if (!_isFocusing && !_isResting) {
@@ -160,16 +254,6 @@ class FocusProvider with ChangeNotifier {
     }
   }
 
-  void toggleAppBlacklist(String packageName) {
-    if (_blacklistedApps.contains(packageName)) {
-      _blacklistedApps.remove(packageName);
-    } else {
-      _blacklistedApps.add(packageName);
-    }
-    _saveBlacklistedApps();
-    notifyListeners();
-  }
-
   String get formattedTime {
     int minutes = _remainingSeconds ~/ 60;
     int seconds = _remainingSeconds % 60;
@@ -183,7 +267,7 @@ class FocusProvider with ChangeNotifier {
     _pomodoroElapsedSeconds = 0;
     _timer?.cancel();
     
-    NativeIntegration.startPersistentService(_blacklistedApps.toList());
+    NativeIntegration.startPersistentService(getActiveBlockListApps(), _remainingSeconds);
 
     _saveTimerState();
     _startInternalTimer();
@@ -241,7 +325,7 @@ class FocusProvider with ChangeNotifier {
       _isResting = false;
       _pomodoroElapsedSeconds = 0;
       _remainingSeconds = _savedFocusSeconds;
-      NativeIntegration.startPersistentService(_blacklistedApps.toList());
+      NativeIntegration.startPersistentService(getActiveBlockListApps(), _remainingSeconds);
       _saveTimerState();
       notifyListeners();
   }

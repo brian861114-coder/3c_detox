@@ -42,9 +42,12 @@ class NativeIntegration {
   }
 
   // Start the persistent service
-  static Future<void> startPersistentService(List<String> blockedApps) async {
+  static Future<void> startPersistentService(List<String> blockedApps, int remainingSeconds) async {
     try {
-      await _channel.invokeMethod('startService', {'blockedApps': blockedApps});
+      await _channel.invokeMethod('startService', {
+        'blockedApps': blockedApps,
+        'remainingSeconds': remainingSeconds,
+      });
     } on PlatformException catch (e) {
       print("Failed to start service: '${e.message}'.");
     }

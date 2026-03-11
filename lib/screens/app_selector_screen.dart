@@ -6,7 +6,8 @@ import '../providers/language_provider.dart';
 import '../utils/native_integration.dart';
 
 class AppSelectorScreen extends StatefulWidget {
-  const AppSelectorScreen({super.key});
+  final String blockListId;
+  const AppSelectorScreen({super.key, required this.blockListId});
 
   @override
   State<AppSelectorScreen> createState() => _AppSelectorScreenState();
@@ -16,11 +17,15 @@ class _AppSelectorScreenState extends State<AppSelectorScreen> {
   List<Map<String, String>> _installedApps = [];
   bool _isLoading = true;
   String _searchQuery = '';
+  late TextEditingController _nameController;
 
   @override
   void initState() {
     super.initState();
     _fetchApps();
+    final focusProvider = context.read<FocusProvider>();
+    final list = focusProvider.getBlockList(widget.blockListId);
+    _nameController = TextEditingController(text: list.name);
   }
 
   Future<void> _fetchApps() async {
@@ -36,12 +41,19 @@ class _AppSelectorScreenState extends State<AppSelectorScreen> {
   }
 
   @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final focusProvider = context.watch<FocusProvider>();
     final lang = context.watch<LanguageProvider>();
+    final blockList = focusProvider.getBlockList(widget.blockListId);
 
     final filteredApps = _searchQuery.isEmpty
-        ? _installedApps
+        ? List<Map<String, String>>.from(_installedApps)
         : _installedApps.where((app) {
             final appName = app['name']?.toLowerCase() ?? '';
             final packageName = app['packageName']?.toLowerCase() ?? '';
@@ -49,9 +61,17 @@ class _AppSelectorScreenState extends State<AppSelectorScreen> {
             return appName.contains(query) || packageName.contains(query);
           }).toList();
 
+    filteredApps.sort((a, b) {
+      final aBlocked = blockList.apps.contains(a['packageName']);
+      final bBlocked = blockList.apps.contains(b['packageName']);
+      if (aBlocked && !bBlocked) return -1;
+      if (!aBlocked && bBlocked) return 1;
+      return a['name']!.toLowerCase().compareTo(b['name']!.toLowerCase());
+    });
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(lang.translate('choose_apps_to_block'), style: const TextStyle(fontWeight: FontWeight.w300, letterSpacing: 1.0)),
+        title: Text(lang.translate('choose_apps_to_block'), style: const TextStyle(fontWeight: FontWeight.w300, letterSpacing: 1.0, fontSize: 16)),
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
@@ -88,6 +108,25 @@ class _AppSelectorScreenState extends State<AppSelectorScreen> {
                 : Column(
                     children: [
                       Padding(
+                        padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
+                        child: TextField(
+                          controller: _nameController,
+                          onChanged: (value) {
+                            focusProvider.updateBlockListName(widget.blockListId, value);
+                          },
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF334155)),
+                          decoration: InputDecoration(
+                            hintText: '清單名稱...',
+                            filled: true,
+                            fillColor: Colors.white.withOpacity(0.4),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(15),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                        ),
+                      ),
+                      Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                         child: TextField(
                           onChanged: (value) {
@@ -115,7 +154,7 @@ class _AppSelectorScreenState extends State<AppSelectorScreen> {
                             final app = filteredApps[index];
                             final packageName = app['packageName']!;
                             final appName = app['name']!;
-                      final isBlocked = focusProvider.blacklistedApps.contains(packageName);
+                      final isBlocked = blockList.apps.contains(packageName);
 
                       return Container(
                         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -138,9 +177,9 @@ class _AppSelectorScreenState extends State<AppSelectorScreen> {
                           trailing: Switch(
                             value: isBlocked,
                             activeColor: const Color(0xFFEF4444),
-                            onChanged: (_) => focusProvider.toggleAppBlacklist(packageName),
+                            onChanged: (_) => focusProvider.toggleAppInList(widget.blockListId, packageName),
                           ),
-                          onTap: () => focusProvider.toggleAppBlacklist(packageName),
+                          onTap: () => focusProvider.toggleAppInList(widget.blockListId, packageName),
                         ),
                             ),
                           ),

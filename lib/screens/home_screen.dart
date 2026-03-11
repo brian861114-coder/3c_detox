@@ -7,7 +7,7 @@ import '../providers/language_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/native_integration.dart';
 
-import 'app_selector_screen.dart';
+import 'block_list_db_screen.dart';
 import 'stats_screen.dart';
 import 'schedule_screen.dart';
 
@@ -78,7 +78,8 @@ class _HomeScreenState extends State<HomeScreen> {
               onPressed: () async {
                 final prefs = await SharedPreferences.getInstance();
                 await prefs.setBool('has_seen_permissions', true);
-                if (mounted) Navigator.pop(context);
+                if (!context.mounted) return;
+                Navigator.pop(context);
               },
               child: Text(lang.translate('perm_done'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
@@ -156,7 +157,7 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: const Icon(Icons.list_alt),
             onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const AppSelectorScreen()));
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const BlockListDbScreen()));
             },
           )
         ],
@@ -305,6 +306,37 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                         ),
+                        
+                        const SizedBox(height: 30),
+                        if (!focusProvider.isFocusing && !focusProvider.isResting)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.5),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: Colors.white.withOpacity(0.6)),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: focusProvider.activeBlockListId,
+                                dropdownColor: const Color(0xFFF8FAFC),
+                                isDense: true,
+                                icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF334155)),
+                                style: const TextStyle(color: Color(0xFF334155), fontWeight: FontWeight.w500, fontSize: 16),
+                                items: focusProvider.blockLists.map((list) {
+                                  return DropdownMenuItem(
+                                    value: list.id,
+                                    child: Text(list.name),
+                                  );
+                                }).toList(),
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    focusProvider.setActiveBlockList(value);
+                                  }
+                                },
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ),

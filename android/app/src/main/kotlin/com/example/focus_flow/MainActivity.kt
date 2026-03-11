@@ -43,8 +43,10 @@ class MainActivity: FlutterActivity() {
                 }
                 "startService" -> {
                     val apps = call.argument<List<String>>("blockedApps") ?: emptyList()
+                    val remainingSeconds = call.argument<Int>("remainingSeconds") ?: 0
                     val serviceIntent = Intent(this, FocusService::class.java).apply {
                         putStringArrayListExtra("blockedApps", ArrayList(apps))
+                        putExtra("remainingSeconds", remainingSeconds)
                     }
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                         startForegroundService(serviceIntent)

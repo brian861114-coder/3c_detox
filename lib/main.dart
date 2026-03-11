@@ -39,7 +39,7 @@ class _FocusFlowAppState extends State<FocusFlowApp> {
       final focusProv = context.read<FocusProvider>();
 
       if (scheduleProv.isCurrentlyInScheduledFocus()) {
-        if (!focusProv.isFocusing) {
+        if (!focusProv.isFocusing && !focusProv.isResting) {
             // Force start strict mode focus
             if (!focusProv.isStrictMode) {
               focusProv.toggleStrictMode(); 
