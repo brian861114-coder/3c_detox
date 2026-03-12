@@ -3,15 +3,93 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/focus_provider.dart';
 import '../providers/language_provider.dart';
+import '../providers/schedule_provider.dart';
 import 'app_selector_screen.dart';
 
 class BlockListDbScreen extends StatelessWidget {
   const BlockListDbScreen({super.key});
 
+  /// Show warning dialog if the block list is used by any schedules.
+  /// Returns true if user confirms (or no schedules use it), false if user cancels.
+  Future<bool> _confirmBlockListAction(
+    BuildContext context,
+    String blockListId,
+    LanguageProvider lang,
+    ScheduleProvider scheduleProvider,
+  ) async {
+    final affectedSchedules = scheduleProvider.getSchedulesUsingBlockList(blockListId);
+    if (affectedSchedules.isEmpty) {
+      return true; // No schedules affected, safe to proceed
+    }
+
+    final schedulesText = affectedSchedules.map((s) => '• $s').join('\n');
+    final description = lang
+        .translate('blocklist_in_use_desc')
+        .replaceAll('{schedules}', schedulesText);
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFFF8FAFC),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              const Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444), size: 28),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  lang.translate('blocklist_in_use_warning'),
+                  style: const TextStyle(
+                    color: Color(0xFF334155),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            description,
+            style: const TextStyle(color: Color(0xFF475569), fontSize: 14, height: 1.5),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(
+                lang.translate('cancel'),
+                style: const TextStyle(color: Color(0xFF475569)),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFEF4444),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(
+                lang.translate('confirm'),
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == true) {
+      // User confirmed — disable affected schedules and mark them
+      scheduleProvider.onBlockListChanged(blockListId);
+      return true;
+    }
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final focusProvider = context.watch<FocusProvider>();
     final lang = context.watch<LanguageProvider>();
+    final scheduleProvider = context.watch<ScheduleProvider>();
 
     return Scaffold(
       appBar: AppBar(
@@ -28,9 +106,9 @@ class BlockListDbScreen extends StatelessWidget {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Color(0xFFE8E6F8), // pastel lavender
-                  Color(0xFFE0F4E8), // mint green
-                  Color(0xFFD6E8EE), // baby blue
+                  Color(0xFFE8E6F8),
+                  Color(0xFFE0F4E8),
+                  Color(0xFFD6E8EE),
                 ],
               ),
             ),
@@ -44,6 +122,11 @@ class BlockListDbScreen extends StatelessWidget {
                     itemCount: focusProvider.blockLists.length,
                     itemBuilder: (context, index) {
                       final list = focusProvider.blockLists[index];
+                      // Check if any schedules use this block list
+                      final isUsedBySchedules = scheduleProvider
+                          .getSchedulesUsingBlockList(list.id)
+                          .isNotEmpty;
+
                       return Container(
                         margin: const EdgeInsets.only(bottom: 12),
                         child: ClipRRect(
@@ -60,28 +143,93 @@ class BlockListDbScreen extends StatelessWidget {
                                 ),
                               ),
                               child: ListTile(
-                                title: Text(list.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500, color: Color(0xFF334155))),
-                                subtitle: Text('${list.apps.length} apps', style: TextStyle(color: const Color(0xFF334155).withOpacity(0.7))),
+                                title: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        list.name,
+                                        style: const TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w500,
+                                          color: Color(0xFF334155),
+                                        ),
+                                      ),
+                                    ),
+                                    if (isUsedBySchedules)
+                                      const Tooltip(
+                                        message: 'Used by schedules',
+                                        child: Padding(
+                                          padding: EdgeInsets.only(left: 4),
+                                          child: Icon(
+                                            Icons.schedule,
+                                            size: 16,
+                                            color: Color(0xFF3B82F6),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                subtitle: Text(
+                                  '${list.apps.length} apps',
+                                  style: TextStyle(color: const Color(0xFF334155).withOpacity(0.7)),
+                                ),
                                 trailing: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     IconButton(
                                       icon: const Icon(Icons.edit, color: Color(0xFF3B82F6)),
-                                      onPressed: () {
-                                        Navigator.push(context, MaterialPageRoute(builder: (_) => AppSelectorScreen(blockListId: list.id)));
+                                      onPressed: () async {
+                                        // Check if schedules use this list — warn before editing
+                                        final confirmed = await _confirmBlockListAction(
+                                          context,
+                                          list.id,
+                                          lang,
+                                          scheduleProvider,
+                                        );
+                                        if (confirmed && context.mounted) {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => AppSelectorScreen(blockListId: list.id),
+                                            ),
+                                          );
+                                        }
                                       },
                                     ),
                                     if (focusProvider.blockLists.length > 1)
                                       IconButton(
                                         icon: const Icon(Icons.delete_outline, color: Color(0xFFEF4444)),
-                                        onPressed: () {
-                                          focusProvider.deleteBlockList(list.id);
+                                        onPressed: () async {
+                                          // Check if schedules use this list — warn before deleting
+                                          final confirmed = await _confirmBlockListAction(
+                                            context,
+                                            list.id,
+                                            lang,
+                                            scheduleProvider,
+                                          );
+                                          if (confirmed) {
+                                            focusProvider.deleteBlockList(list.id);
+                                          }
                                         },
                                       ),
                                   ],
                                 ),
-                                onTap: () {
-                                  Navigator.push(context, MaterialPageRoute(builder: (_) => AppSelectorScreen(blockListId: list.id)));
+                                onTap: () async {
+                                  // Also warn when tapping to enter edit
+                                  final confirmed = await _confirmBlockListAction(
+                                    context,
+                                    list.id,
+                                    lang,
+                                    scheduleProvider,
+                                  );
+                                  if (confirmed && context.mounted) {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => AppSelectorScreen(blockListId: list.id),
+                                      ),
+                                    );
+                                  }
                                 },
                               ),
                             ),

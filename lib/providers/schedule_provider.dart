@@ -40,12 +40,68 @@ class ScheduleProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  /// Toggle the enabled/disabled state of a schedule
+  void toggleScheduleEnabled(String id) {
+    final index = _schedules.indexWhere((s) => s.id == id);
+    if (index != -1) {
+      _schedules[index] = _schedules[index].copyWith(
+        isEnabled: !_schedules[index].isEnabled,
+      );
+      _saveSchedules();
+      notifyListeners();
+    }
+  }
+
+  /// Get list of schedule names that use a specific block list
+  List<String> getSchedulesUsingBlockList(String blockListId) {
+    final result = <String>[];
+    for (var schedule in _schedules) {
+      if (schedule.blockListId == blockListId) {
+        final time = '${schedule.startHour.toString().padLeft(2, '0')}:${schedule.startMinute.toString().padLeft(2, '0')}';
+        result.add(time);
+      }
+    }
+    return result;
+  }
+
+  /// When a block list is deleted or modified,
+  /// disable all schedules using it and mark them with blockListChanged flag
+  void onBlockListChanged(String blockListId) {
+    bool changed = false;
+    for (int i = 0; i < _schedules.length; i++) {
+      if (_schedules[i].blockListId == blockListId) {
+        _schedules[i] = _schedules[i].copyWith(
+          isEnabled: false,
+          blockListChanged: true,
+        );
+        changed = true;
+      }
+    }
+    if (changed) {
+      _saveSchedules();
+      notifyListeners();
+    }
+  }
+
+  /// Clear the blockListChanged flag for a schedule (user acknowledges the change)
+  void clearBlockListChangedFlag(String scheduleId) {
+    final index = _schedules.indexWhere((s) => s.id == scheduleId);
+    if (index != -1) {
+      _schedules[index] = _schedules[index].copyWith(blockListChanged: false);
+      _saveSchedules();
+      notifyListeners();
+    }
+  }
+
   bool isCurrentlyInScheduledFocus() {
     final now = DateTime.now();
     final currentDay = now.weekday; // 1 = Monday, 7 = Sunday
     final prevDay = currentDay == 1 ? 7 : currentDay - 1;
 
     for (var schedule in _schedules) {
+      // Only check enabled schedules
+      if (!schedule.isEnabled) continue;
+
       // Check for today's schedule
       if (schedule.weekdays.contains(currentDay)) {
         final startToday = DateTime(now.year, now.month, now.day, schedule.startHour, schedule.startMinute);

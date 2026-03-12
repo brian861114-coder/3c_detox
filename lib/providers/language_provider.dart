@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -38,6 +39,12 @@ class LanguageProvider with ChangeNotifier {
       'day_5': 'Fri',
       'day_6': 'Sat',
       'day_7': 'Sun',
+      'block_list': 'Block List',
+      'default_list': 'Default (Active)',
+      'blocklist_in_use_warning': 'Block List In Use',
+      'blocklist_in_use_desc': 'The following schedules are using this block list:\n\n{schedules}\n\nIf you proceed, these schedules will be automatically disabled.',
+      'schedule_disabled': 'Disabled',
+      'blocklist_changed_hint': 'Block list changed',
       'perm_title': 'Required Permissions',
       'perm_desc': 'To ensure FocusFlow can properly lock your phone and prevent distractions, please grant the following 3 permissions. Click each button below to go to settings:',
       'perm_overlay': '1. Display over other apps',
@@ -72,6 +79,12 @@ class LanguageProvider with ChangeNotifier {
       'day_5': '五',
       'day_6': '六',
       'day_7': '日',
+      'block_list': '封鎖名單',
+      'default_list': '預設（當前使用中）',
+      'blocklist_in_use_warning': '封鎖名單使用中',
+      'blocklist_in_use_desc': '以下預約排程正在使用此封鎖名單：\n\n{schedules}\n\n若繼續執行，這些排程將會自動停用。',
+      'schedule_disabled': '已停用',
+      'blocklist_changed_hint': '封鎖名單已變更',
       'perm_title': '需要授權',
       'perm_desc': '為了確保 FocusFlow 能夠在您專注時鎖定手機並防止干擾，請務必授予以下 3 項權限。請點擊下方按鈕前往設定：',
       'perm_overlay': '1. 顯示於上方',
@@ -106,6 +119,12 @@ class LanguageProvider with ChangeNotifier {
       'day_5': '金',
       'day_6': '土',
       'day_7': '日',
+      'block_list': 'ブロックリスト',
+      'default_list': 'デフォルト（アクティブ）',
+      'blocklist_in_use_warning': 'ブロックリスト使用中',
+      'blocklist_in_use_desc': '以下のスケジュールがこのブロックリストを使用しています：\n\n{schedules}\n\n続行すると、これらのスケジュールは自動的に無効になります。',
+      'schedule_disabled': '無効',
+      'blocklist_changed_hint': 'ブロックリストが変更されました',
       'perm_title': '必要な権限',
       'perm_desc': 'FocusFlow が適切に電話をロックし、気を散らすものを防ぐために、以下の3つの権限を付与してください。下の各ボタンをクリックして設定に移動します：',
       'perm_overlay': '1. 他のアプリの上に表示',
@@ -131,6 +150,21 @@ class LanguageProvider with ChangeNotifier {
     if (savedCode != null && _localizedStrings.containsKey(savedCode)) {
       _currentLanguage = savedCode;
       notifyListeners();
+    } else {
+      // Auto-detect system language on first launch
+      try {
+        final localeName = Platform.localeName.toLowerCase();
+        if (localeName.startsWith('zh')) {
+          _currentLanguage = 'zh';
+        } else if (localeName.startsWith('ja')) {
+          _currentLanguage = 'ja';
+        } else {
+          _currentLanguage = 'en';
+        }
+        notifyListeners();
+      } catch (e) {
+        // Fallback to default if Platform is not available
+      }
     }
   }
 
