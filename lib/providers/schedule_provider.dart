@@ -94,6 +94,11 @@ class ScheduleProvider with ChangeNotifier {
   }
 
   bool isCurrentlyInScheduledFocus() {
+    return getCurrentActiveSchedule() != null;
+  }
+
+  /// Returns the currently active schedule if one matches, or null
+  FocusSchedule? getCurrentActiveSchedule() {
     final now = DateTime.now();
     final currentDay = now.weekday; // 1 = Monday, 7 = Sunday
     final prevDay = currentDay == 1 ? 7 : currentDay - 1;
@@ -108,22 +113,21 @@ class ScheduleProvider with ChangeNotifier {
         final endToday = startToday.add(Duration(minutes: schedule.durationMinutes));
 
         if (now.isAfter(startToday) && now.isBefore(endToday)) {
-          return true;
+          return schedule;
         }
       }
 
       // Check for yesterday's schedule (in case it crosses midnight)
       if (schedule.weekdays.contains(prevDay)) {
-        // Construct yesterday's start time
         final yesterday = now.subtract(const Duration(days: 1));
         final startYesterday = DateTime(yesterday.year, yesterday.month, yesterday.day, schedule.startHour, schedule.startMinute);
         final endYesterday = startYesterday.add(Duration(minutes: schedule.durationMinutes));
 
         if (now.isAfter(startYesterday) && now.isBefore(endYesterday)) {
-          return true;
+          return schedule;
         }
       }
     }
-    return false;
+    return null;
   }
 }

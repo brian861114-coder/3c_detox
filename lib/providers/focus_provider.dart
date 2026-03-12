@@ -260,6 +260,14 @@ class FocusProvider with ChangeNotifier {
     return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
+  List<String> getBlockListApps(String blockListId) {
+    try {
+      return _blockLists.firstWhere((list) => list.id == blockListId).apps;
+    } catch (e) {
+      return getActiveBlockListApps();
+    }
+  }
+
   void startFocus([int? ignored]) {
     _isFocusing = true;
     _isResting = false;
@@ -268,6 +276,26 @@ class FocusProvider with ChangeNotifier {
     _timer?.cancel();
     
     NativeIntegration.startPersistentService(getActiveBlockListApps(), _remainingSeconds);
+
+    _saveTimerState();
+    _startInternalTimer();
+    notifyListeners();
+  }
+
+  /// Start a focus session from a schedule, with specific duration and block list
+  void startScheduledFocus({required int durationSeconds, String? blockListId}) {
+    _isFocusing = true;
+    _isResting = false;
+    _remainingSeconds = durationSeconds;
+    _pomodoroElapsedSeconds = 0;
+    _timer?.cancel();
+
+    // Use the schedule's block list if specified, otherwise use active list
+    final appsToBlock = (blockListId != null)
+        ? getBlockListApps(blockListId)
+        : getActiveBlockListApps();
+
+    NativeIntegration.startPersistentService(appsToBlock, _remainingSeconds);
 
     _saveTimerState();
     _startInternalTimer();
