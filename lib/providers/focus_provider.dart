@@ -1,14 +1,26 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../utils/native_integration.dart';
 import '../models/block_list.dart';
+import '../utils/native_integration.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:math' as math;
 
 class FocusProvider with ChangeNotifier {
   // Config state
   int _userFocusDurationSeconds = 30 * 60;
   bool _isPomodoroMode = true;
   bool _isStrictMode = false;
+  bool _isAlarmEnabled = false;
+  bool _isMusicEnabled = false;
+  bool _isShuffleMusic = false;
+  List<String> _musicPaths = [];
+  
+  final AudioPlayer _musicPlayer = AudioPlayer();
+  final AudioPlayer _alarmPlayer = AudioPlayer();
+  int _currentMusicIndex = 0;
+  StreamSubscription? _onCompleteSubscription;
   
   // Block Lists
   List<BlockList> _blockLists = [];
@@ -19,6 +31,8 @@ class FocusProvider with ChangeNotifier {
   bool _isResting = false;
   int _remainingSeconds = 30 * 60;
   Timer? _timer;
+  bool _isAlarmRinging = false;
+  Timer? _alarmAutoStopTimer;
   
   // Pomodoro tracking
   int _pomodoroElapsedSeconds = 0;
@@ -57,6 +71,10 @@ class FocusProvider with ChangeNotifier {
     _totalFocusedMinutes = prefs.getInt('totalFocusedMinutes') ?? 0;
     _isPomodoroMode = prefs.getBool('isPomodoroMode') ?? true;
     _isStrictMode = prefs.getBool('isStrictMode') ?? false;
+    _isAlarmEnabled = prefs.getBool('isAlarmEnabled') ?? false;
+    _isMusicEnabled = prefs.getBool('isMusicEnabled') ?? false;
+    _isShuffleMusic = prefs.getBool('isShuffleMusic') ?? false;
+    _musicPaths = prefs.getStringList('musicPaths') ?? [];
     _userFocusDurationSeconds = prefs.getInt('userFocusDurationSeconds') ?? 30 * 60;
 
     final isFocusing = prefs.getBool('isFocusing') ?? false;
@@ -117,6 +135,10 @@ class FocusProvider with ChangeNotifier {
     await prefs.setInt('totalFocusedMinutes', _totalFocusedMinutes);
     await prefs.setBool('isPomodoroMode', _isPomodoroMode);
     await prefs.setBool('isStrictMode', _isStrictMode);
+    await prefs.setBool('isAlarmEnabled', _isAlarmEnabled);
+    await prefs.setBool('isMusicEnabled', _isMusicEnabled);
+    await prefs.setBool('isShuffleMusic', _isShuffleMusic);
+    await prefs.setStringList('musicPaths', _musicPaths);
     await prefs.setInt('userFocusDurationSeconds', _userFocusDurationSeconds);
   }
 
@@ -150,6 +172,13 @@ class FocusProvider with ChangeNotifier {
   bool get isResting => _isResting;
   bool get isPomodoroMode => _isPomodoroMode;
   bool get isStrictMode => _isStrictMode;
+  bool get isAlarmEnabled => _isAlarmEnabled;
+  bool get isMusicEnabled => _isMusicEnabled;
+  bool get isShuffleMusic => _isShuffleMusic;
+  List<String> get musicPaths => List.unmodifiable(_musicPaths);
+  bool get isAlarmRinging => _isAlarmRinging;
+  int get currentMusicIndex => _currentMusicIndex;
+  
   int get remainingSeconds => _remainingSeconds;
   int get userFocusDurationSeconds => _userFocusDurationSeconds;
   int get focusCyclesCompleted => _focusCyclesCompleted;
@@ -254,6 +283,91 @@ class FocusProvider with ChangeNotifier {
     }
   }
 
+  void toggleAlarm() {
+    _isAlarmEnabled = !_isAlarmEnabled;
+    _saveStats();
+    notifyListeners();
+  }
+
+  void toggleMusic() {
+    _isMusicEnabled = !_isMusicEnabled;
+    if (!_isMusicEnabled) {
+      _musicPlayer.stop();
+    } else if (_isFocusing || _isResting) {
+      if (_musicPaths.isNotEmpty) _playMusic();
+    }
+    _saveStats();
+    notifyListeners();
+  }
+
+  void removeMusicPath(String path) {
+    if (_musicPaths.contains(path)) {
+      _musicPaths.remove(path);
+      if ((_isFocusing || _isResting) && _isMusicEnabled) {
+         _musicPlayer.stop();
+         if (_musicPaths.isNotEmpty) {
+            _playMusic();
+         }
+      }
+      _saveStats();
+      notifyListeners();
+    }
+  }
+
+  void toggleShuffle() {
+    _isShuffleMusic = !_isShuffleMusic;
+    _saveStats();
+    notifyListeners();
+  }
+
+  void setMusicPaths(List<String> paths) {
+    _musicPaths = paths;
+    _saveStats();
+    notifyListeners();
+  }
+
+  void addMusicPaths(List<String> paths) {
+    for (var p in paths) {
+      if (!_musicPaths.contains(p)) {
+        _musicPaths.add(p);
+      }
+    }
+    _saveStats();
+    notifyListeners();
+  }
+
+  void addMusicFromDirectory(String dirPath) async {
+    try {
+      final dir = Directory(dirPath);
+      if (await dir.exists()) {
+        List<String> newPaths = [];
+        final entities = dir.listSync(recursive: true, followLinks: false);
+        for (var entity in entities) {
+          if (entity is File) {
+             final ext = entity.path.toLowerCase();
+             if (ext.endsWith('.mp3') || ext.endsWith('.wav') || ext.endsWith('.m4a') || ext.endsWith('.aac') || ext.endsWith('.flac')) {
+               if (!_musicPaths.contains(entity.path)) {
+                 newPaths.add(entity.path);
+               }
+             }
+          }
+        }
+        _musicPaths.addAll(newPaths);
+        _saveStats();
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint("Error reading directory: $e");
+    }
+  }
+
+  void stopAlarm() {
+     _isAlarmRinging = false;
+     _alarmPlayer.stop();
+     _alarmAutoStopTimer?.cancel();
+     notifyListeners();
+  }
+
   String get formattedTime {
     int minutes = _remainingSeconds ~/ 60;
     int seconds = _remainingSeconds % 60;
@@ -279,10 +393,94 @@ class FocusProvider with ChangeNotifier {
 
     _saveTimerState();
     _startInternalTimer();
+
+    if (_isMusicEnabled && _musicPaths.isNotEmpty) {
+      _playMusic();
+    }
+
     notifyListeners();
   }
 
-  /// Start a focus session from a schedule, with specific duration and block list
+  void _playMusic() async {
+    if (_musicPaths.isEmpty) return;
+    
+    if (_isShuffleMusic) {
+      _currentMusicIndex = math.Random().nextInt(_musicPaths.length);
+    } else {
+      _currentMusicIndex = 0;
+    }
+    
+    _playCurrentTrack();
+    
+    // Cancel old subscription to prevent duplicate listeners
+    await _onCompleteSubscription?.cancel();
+    _onCompleteSubscription = _musicPlayer.onPlayerComplete.listen((event) {
+       if ((_isFocusing || _isResting) && _isMusicEnabled) {
+         _playNextTrack();
+       }
+    });
+  }
+
+  void _playCurrentTrack({int retryCount = 0}) async {
+    if (_musicPaths.isEmpty) return;
+    // Guard against infinite recursion
+    if (retryCount >= _musicPaths.length) {
+      debugPrint("All music files are invalid, disabling music.");
+      _isMusicEnabled = false;
+      notifyListeners();
+      return;
+    }
+    try {
+      final file = File(_musicPaths[_currentMusicIndex]);
+      if (!await file.exists()) {
+        throw Exception("File not found");
+      }
+      await _musicPlayer.play(DeviceFileSource(_musicPaths[_currentMusicIndex]));
+    } catch (e) {
+      debugPrint("Error playing music: $e");
+      // Remove missing file and try next
+      _musicPaths.removeAt(_currentMusicIndex);
+      _saveStats();
+      if (_musicPaths.isEmpty) {
+        _isMusicEnabled = false;
+        notifyListeners();
+        return;
+      }
+      if (_currentMusicIndex >= _musicPaths.length) {
+        _currentMusicIndex = 0;
+      }
+      _playCurrentTrack(retryCount: retryCount + 1);
+    }
+  }
+
+  void _playNextTrack() {
+    if (_musicPaths.isEmpty) return;
+    if (_isShuffleMusic) {
+      _currentMusicIndex = math.Random().nextInt(_musicPaths.length);
+    } else {
+      _currentMusicIndex = (_currentMusicIndex + 1) % _musicPaths.length;
+    }
+    _playCurrentTrack();
+  }
+
+  void playSpecificTrack(int index) async {
+    if (index >= 0 && index < _musicPaths.length) {
+      _currentMusicIndex = index;
+      _isShuffleMusic = false;
+      _saveStats();
+      
+      if ((_isFocusing || _isResting) && _isMusicEnabled) {
+         await _musicPlayer.stop();
+         _playCurrentTrack();
+      } else {
+         _isMusicEnabled = true;
+         await _musicPlayer.stop();
+         _playCurrentTrack();
+      }
+      notifyListeners();
+    }
+  }
+
   void startScheduledFocus({required int durationSeconds, String? blockListId}) {
     _isFocusing = true;
     _isResting = false;
@@ -344,7 +542,32 @@ class FocusProvider with ChangeNotifier {
      _saveStats();
      
      _clearTimerState();
+     
+     // Stop focus FIRST, then trigger alarm so alarm UI state is not overwritten
      stopFocus();
+     
+     if (_isAlarmEnabled) {
+       _triggerAlarm();
+     }
+  }
+
+  void _triggerAlarm() async {
+    _isAlarmRinging = true;
+    notifyListeners();
+    
+    try {
+      // Loop alarm sound (using a default system sound or simple asset)
+      // Since we don't have assets yet, we'll try to find a system sound or just use audioplayers with logic
+      await _alarmPlayer.setReleaseMode(ReleaseMode.loop);
+      // Play the retro mechanical twin-bell alarm
+      await _alarmPlayer.play(AssetSource('retro_alarm.wav'));
+    } catch (e) {
+      debugPrint("Alarm error: $e");
+    }
+
+    _alarmAutoStopTimer = Timer(const Duration(minutes: 5), () {
+      stopAlarm();
+    });
   }
 
   void _onRestComplete() {
@@ -368,12 +591,18 @@ class FocusProvider with ChangeNotifier {
     NativeIntegration.stopPersistentService();
     _clearTimerState();
     
+    _musicPlayer.stop();
+    
     notifyListeners();
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _alarmAutoStopTimer?.cancel();
+    _onCompleteSubscription?.cancel();
+    _musicPlayer.dispose();
+    _alarmPlayer.dispose();
     super.dispose();
   }
 }

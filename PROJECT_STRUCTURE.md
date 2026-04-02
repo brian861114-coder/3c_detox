@@ -13,9 +13,13 @@
 | `pubspec.yaml` | Flutter 專案的核心設定檔，定義專案名稱、依賴套件 (Dependencies) 及資產 (Assets)。 |
 | `android/` | Android 原生平台的專案程式碼。 |
 | `ios/` | iOS 原生平台的專案程式碼。 |
+| `windows/` | Windows 桌面平台的專案程式碼。 |
 | `lib/` | Flutter 專案的核心程式碼所在之處 (Dart)。 |
-| `assets/` | 放置靜態資源，如圖片、字體或圖示。 |
+| `web/` | Web 平台的專案程式碼。 |
+| `assets/` | 放置靜態資源，如圖片、字體、圖示及**背景音效 (retro_alarm.wav)**。 |
 | `test/` | 單元測試或集成測試程式碼。 |
+| `update_history.md` | 專案更新日誌，記錄每次功能開發與 Bug 修復細節。 |
+| `project_structure.md` | 本文件，說明專案架構與目錄用途。 |
 
 ---
 
@@ -30,7 +34,7 @@
 
 ### 📁 lib/providers (狀態管理)
 使用 Provider 模式管理應用的全域狀態。
-- `focus_provider.dart`: 管理專注模式的核心邏輯（計時、番茄鐘、嚴格模式開關）。
+- `focus_provider.dart`: 管理專注模式的核心邏輯（計時、番茄鐘、嚴格模式開關、**音樂播放與鬧鐘功能**）。
 - `language_provider.dart`: 管理多語言切換 (支援 中、英、日語)。
 - `schedule_provider.dart`: 管理預約排程的儲存、刪除、切換與邏輯判斷。
 
@@ -41,6 +45,7 @@
 - `block_list_db_screen.dart`: 封鎖名單管理介面。
 - `app_selector_screen.dart`: 應用程式選擇器，用於編輯封鎖名單。
 - `stats_screen.dart`: 專注數據統計圖表介面。
+- `music_list_screen.dart`: 音樂清單管理介面，可查看與移除匯入的曲目。
 
 ### 📁 lib/utils (工具類)
 - `native_integration.dart`: Flutter 與 Android 原生程式碼溝通的橋樑 (MethodChannel)。

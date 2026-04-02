@@ -51,6 +51,19 @@ class LanguageProvider with ChangeNotifier {
       'perm_usage': '2. Usage Data Access',
       'perm_battery': '3. Unrestricted Battery',
       'perm_done': 'I have granted all permissions',
+      'enable_alarm': 'Enable Alarm',
+      'music_player': 'Music Option',
+      'select_music': 'Select Music',
+      'shuffle_mode': 'Shuffle',
+      'none_selected': 'None',
+      'music_count': '{count} songs selected',
+      'select_files': 'Select Files',
+      'import_folder': 'Import Folder',
+      'clear_music': 'Clear / Remove Music',
+      'music_list': 'Music List',
+      'select_to_play': 'Play Specific Song',
+      'alarm_ringing': '⏰ ALARM RINGING! ⏰',
+      'stop_alarm': 'STOP ALARM',
     },
     'zh': {
       'pomodoro_mode': '番茄鐘模式',
@@ -91,6 +104,19 @@ class LanguageProvider with ChangeNotifier {
       'perm_usage': '2. 使用量資料存取',
       'perm_battery': '3. 電池不受限制',
       'perm_done': '我已完成上述所有授權',
+      'enable_alarm': '開啟鬧鐘',
+      'music_player': '音樂播放選項',
+      'select_music': '選擇音樂',
+      'shuffle_mode': '隨機播放',
+      'none_selected': '未選擇',
+      'music_count': '已選擇 {count} 首音樂',
+      'select_files': '選擇音樂檔案',
+      'import_folder': '匯入音樂資料夾 (適用於舊版 Android)',
+      'clear_music': '清空所有音樂',
+      'music_list': '音樂清單',
+      'select_to_play': '選擇播放音樂',
+      'alarm_ringing': '⏰ 鬧鐘響了！ ⏰',
+      'stop_alarm': '停止鬧鐘',
     },
     'ja': {
       'pomodoro_mode': 'ポモドーロモード',
@@ -131,6 +157,19 @@ class LanguageProvider with ChangeNotifier {
       'perm_usage': '2. 使用状況データへのアクセス',
       'perm_battery': '3. バッテリーの最適化の対象外',
       'perm_done': 'すべての権限を付与しました',
+      'enable_alarm': 'アラームを有効にする',
+      'music_player': '音楽オプション',
+      'select_music': '音楽を選択',
+      'shuffle_mode': 'シャッフル',
+      'none_selected': 'なし',
+      'music_count': '{count} 曲を選択中',
+      'select_files': 'ファイルを選択',
+      'import_folder': 'フォルダをインポート',
+      'clear_music': '音楽をクリア',
+      'music_list': '音楽リスト',
+      'select_to_play': '再生する音楽を選択',
+      'alarm_ringing': '⏰ アラームが鳴っています！ ⏰',
+      'stop_alarm': 'アラームを停止',
     },
   };
 
@@ -168,7 +207,13 @@ class LanguageProvider with ChangeNotifier {
     }
   }
 
-  String translate(String key) {
-    return _localizedStrings[_currentLanguage]?[key] ?? key;
+  String translate(String key, {Map<String, String>? arguments}) {
+    String value = _localizedStrings[_currentLanguage]?[key] ?? key;
+    if (arguments != null) {
+      arguments.forEach((argKey, argValue) {
+        value = value.replaceAll('{$argKey}', argValue);
+      });
+    }
+    return value;
   }
 }
